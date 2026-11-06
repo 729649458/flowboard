@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>推箱子 · 仓库番</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: radial-gradient(circle at 20% 10%, #1e293b, #0b1120 60%);
+    color: #e2e8f0; font-family: "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .wrap { text-align: center; padding: 28px; }
+  h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: 6px; color: #f8fafc; }
+  .sub { margin: 0 0 18px; color: #94a3b8; font-size: 14px; letter-spacing: 1px; }
+  .hud { display: flex; justify-content: center; gap: 26px; margin-bottom: 14px; color: #cbd5e1; font-size: 14px; }
+  .hud b { color: #38bdf8; font-size: 18px; }
+  canvas { border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px #334155 inset; }
+  .tip { margin-top: 14px; color: #64748b; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>推 箱 子</h1>
+  <p class="sub">SOKOBAN · 经典仓库番</p>
+  <div class="hud"><span>步数 <b id="moves">0</b></span><span>完成 <b id="done">0/2</b></span></div>
+  <canvas id="game" width="480" height="480"></canvas>
+  <p class="tip">方向键 / WASD 移动 · R 重新开始</p>
+</div>
+<script>
+const LEVEL = [
+  "######",
+  "#    #",
+  "# .$ #",
+  "# .$@#",
+  "#    #",
+  "######",
+];
+const TILE = 80;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const movesEl = document.getElementById("moves");
+const doneEl = document.getElementById("done");
+
+let walls, targets, boxes, player, moves;
+
+function reset() {
+  walls = new Set(); targets = new Set(); boxes = new Set();
+  moves = 0;
+  LEVEL.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === "#") walls.add(`${x},${y}`);
+    if (ch === "." || ch === "*" || ch === "+") targets.add(`${x},${y}`);
+    if (ch === "$" || ch === "*") boxes.add(`${x},${y}`);
+    if (ch === "@" || ch === "+") player = { x, y };
+  }));
+  updateHud();
+  draw();
+}
+
+function updateHud() {
+  movesEl.textContent = moves;
+  const done = [...boxes].filter((b) => targets.has(b)).length;
+  doneEl.textContent = `${done}/2`;
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const bg = ctx.createLinearGradient(0, 0, 480, 480);
+  bg.addColorStop(0, "#0f172a"); bg.addColorStop(1, "#111827");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 480, 480);
+
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) {
+    const px = x * TILE, py = y * TILE, key = `${x},${y}`;
+    if (walls.has(key)) {
+      ctx.fillStyle = "#334155"; roundRect(px + 2, py + 2, TILE - 4, TILE - 4, 10); ctx.fill();
+      ctx.fillStyle = "#475569"; roundRect(px + 8, py + 8, TILE - 16, TILE - 16, 8); ctx.fill();
+    } else {
+      ctx.fillStyle = "#1e293b"; roundRect(px + 2, py + 2, TILE - 4, TILE - 4, 10); ctx.fill();
+      if (targets.has(key)) {
+        ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 3; ctx.beginPath();
+        ctx.arc(px + TILE / 2, py + TILE / 2, 13, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = "rgba(245,158,11,.18)"; ctx.fill();
+      }
+    }
+  }
+
+  for (const key of boxes) {
+    const [x, y] = key.split(",").map(Number);
+    const px = x * TILE, py = y * TILE, on = targets.has(key);
+    ctx.fillStyle = on ? "#22c55e" : "#f97316";
+    roundRect(px + 12, py + 12, TILE - 24, TILE - 24, 10); ctx.fill();
+    ctx.strokeStyle = on ? "#86efac" : "#fdba74"; ctx.lineWidth = 3;
+    roundRect(px + 20, py + 20, TILE - 40, TILE - 40, 6); ctx.stroke();
+  }
+
+  const px = player.x * TILE, py = player.y * TILE;
+  ctx.fillStyle = "#38bdf8"; ctx.beginPath();
+  ctx.arc(px + TILE / 2, py + TILE / 2, 22, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath(); ctx.arc(px + TILE / 2 - 7, py + TILE / 2 - 5, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(px + TILE / 2 + 7, py + TILE / 2 - 5, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 3; ctx.beginPath();
+  ctx.arc(px + TILE / 2, py + TILE / 2 + 4, 9, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  const done = [...boxes].every((b) => targets.has(b));
+  if (done) {
+    ctx.fillStyle = "rgba(2,6,23,.78)"; ctx.fillRect(0, 0, 480, 480);
+    ctx.fillStyle = "#22c55e"; ctx.font = "bold 40px Microsoft YaHei"; ctx.textAlign = "center";
+    ctx.fillText("过关！", 240, 225);
+    ctx.fillStyle = "#e2e8f0"; ctx.font = "18px Microsoft YaHei";
+    ctx.fillText(`用了 ${moves} 步 · 按 R 再来`, 240, 270);
+  }
+}
+
+function move(dx, dy) {
+  const nx = player.x + dx, ny = player.y + dy, key = `${nx},${ny}`;
+  if (walls.has(key)) return;
+  if (boxes.has(key)) {
+    const bx = nx + dx, by = ny + dy, bkey = `${bx},${by}`;
+    if (walls.has(bkey) || boxes.has(bkey)) return;
+    boxes.delete(key); boxes.add(bkey);
+  }
+  player = { x: nx, y: ny };
+  moves++; updateHud(); draw();
+}
+
+const keys = {
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+  W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0],
+};
+addEventListener("keydown", (e) => {
+  if (e.key === "r" || e.key === "R") { reset(); return; }
+  const dir = keys[e.key];
+  if (dir) { e.preventDefault(); move(dir[0], dir[1]); }
+});
+
+reset();
+</script>
+</body>
+</html>
