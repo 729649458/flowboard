@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>贪吃蛇 · 霓虹版</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: radial-gradient(circle at 50% 0%, #052e2b, #020617 65%);
+    color: #d1fae5; font-family: "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .wrap { text-align: center; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: 8px; color: #6ee7b7; text-shadow: 0 0 24px rgba(16,185,129,.6); }
+  .sub { margin: 0 0 16px; color: #64748b; font-size: 13px; letter-spacing: 2px; }
+  .hud { display: flex; justify-content: center; gap: 30px; margin-bottom: 12px; color: #94a3b8; font-size: 14px; }
+  .hud b { color: #34d399; font-size: 20px; }
+  canvas { border-radius: 18px; box-shadow: 0 24px 70px rgba(0,0,0,.6), 0 0 0 1px #064e3b inset, 0 0 40px rgba(16,185,129,.12); }
+  .tip { margin-top: 14px; color: #475569; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>贪 吃 蛇</h1>
+  <p class="sub">NEON SNAKE</p>
+  <div class="hud"><span>得分 <b id="score">0</b></span><span>最高 <b id="best">0</b></span></div>
+  <canvas id="game" width="720" height="520"></canvas>
+  <p class="tip">方向键 / WASD 控制 · 空格暂停</p>
+</div>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const CELL = 26;
+const COLS = 720 / CELL;
+const ROWS = 520 / CELL;
+const scoreEl = document.getElementById("score");
+const bestEl = document.getElementById("best");
+
+let snake, dir, nextDir, food, score, best, alive, paused, timer;
+
+best = Number(localStorage.getItem("snake-best") || 0);
+bestEl.textContent = best;
+
+function reset() {
+  const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
+  snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }, { x: cx - 3, y: cy }];
+  dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
+  score = 0; alive = true; paused = false;
+  scoreEl.textContent = "0";
+  placeFood();
+  draw();
+}
+
+function placeFood() {
+  do {
+    food = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+  } while (snake.some((s) => s.x === food.x && s.y === food.y));
+}
+
+function step() {
+  if (!alive || paused) return;
+  dir = nextDir;
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS ||
+      snake.some((s) => s.x === head.x && s.y === head.y)) {
+    alive = false;
+    if (score > best) { best = score; localStorage.setItem("snake-best", best); bestEl.textContent = best; }
+    draw();
+    return;
+  }
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score += 10; scoreEl.textContent = score; placeFood();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function draw() {
+  const bg = ctx.createLinearGradient(0, 0, 720, 520);
+  bg.addColorStop(0, "#02120f"); bg.addColorStop(1, "#020617");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 720, 520);
+
+  ctx.strokeStyle = "rgba(16,185,129,.07)"; ctx.lineWidth = 1;
+  for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, 520); ctx.stroke(); }
+  for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(720, y * CELL); ctx.stroke(); }
+
+  ctx.shadowColor = "#f43f5e"; ctx.shadowBlur = 22;
+  ctx.fillStyle = "#fb7185";
+  ctx.beginPath(); ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL * 0.34, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  snake.forEach((s, i) => {
+    const t = i / Math.max(snake.length - 1, 1);
+    ctx.fillStyle = i === 0 ? "#a7f3d0" : `hsl(${160 - t * 30}, 80%, ${60 - t * 18}%)`;
+    ctx.shadowColor = "#10b981"; ctx.shadowBlur = i === 0 ? 24 : 10;
+    roundRect(s.x * CELL + 3, s.y * CELL + 3, CELL - 6, CELL - 6, 8); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (i === 0) {
+      ctx.fillStyle = "#022c22";
+      ctx.beginPath(); ctx.arc(s.x * CELL + 9, s.y * CELL + 10, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x * CELL + 17, s.y * CELL + 10, 2.6, 0, Math.PI * 2); ctx.fill();
+    }
+  });
+
+  if (!alive) {
+    ctx.fillStyle = "rgba(2,6,23,.78)"; ctx.fillRect(0, 0, 720, 520);
+    ctx.fillStyle = "#f87171"; ctx.font = "bold 44px Microsoft YaHei"; ctx.textAlign = "center";
+    ctx.fillText("游戏结束", 360, 235);
+    ctx.fillStyle = "#e2e8f0"; ctx.font = "20px Microsoft YaHei";
+    ctx.fillText(`得分 ${score} · 按 R 重开`, 360, 282);
+  } else if (paused) {
+    ctx.fillStyle = "rgba(2,6,23,.65)"; ctx.fillRect(0, 0, 720, 520);
+    ctx.fillStyle = "#6ee7b7"; ctx.font = "bold 36px Microsoft YaHei"; ctx.textAlign = "center";
+    ctx.fillText("已暂停", 360, 270);
+  }
+}
+
+addEventListener("keydown", (e) => {
+  const map = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+    W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0],
+  };
+  if (e.key === " " ) { e.preventDefault(); paused = !paused; draw(); return; }
+  if (e.key === "r" || e.key === "R") { reset(); return; }
+  const d = map[e.key];
+  if (!d) return;
+  e.preventDefault();
+  if (d[0] === -dir.x && d[1] === -dir.y) return;
+  nextDir = { x: d[0], y: d[1] };
+});
+
+reset();
+clearInterval(timer);
+timer = setInterval(step, 120);
+</script>
+</body>
+</html>
